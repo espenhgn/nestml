@@ -1,0 +1,90 @@
+/*
+Name: qiaf_psc_exp_nestml - Leaky quadratic integrate-and-fire neuron model
+                            with exponential PSCs.
+
+Modified by Matthew Farrell
+
+Description:
+qiaf_psc_exp_nestml is an implementation of a quadratic leaky integrate-and-fire model
+with exponential shaped postsynaptic currents (PSCs) according to [1].
+Thus, postsynaptic currents have an infinitely short rise time.
+
+The threshold crossing is followed by an absolute refractory period (t_ref)
+during which the membrane potential is clamped to the resting potential
+and spiking is prohibited.
+
+The nonlinear subthresold dynamics is integrated numerically.
+The neuron dynamics is solved on the time
+grid given by the computation step size. Incoming as well as emitted
+spikes are forced to that grid.
+
+An additional state variable and the corresponding differential
+equation represents a piecewise constant external current.
+
+The general framework for the consistent formulation of systems with
+neuron like dynamics interacting by point events is described in
+[2]. A flow chart can be found in [3].
+
+Sends: SpikeEvent
+
+Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
+
+SeeAlso: 
+*/
+neuron qiaf_psc_exp:
+
+  state:
+    V_abs mV
+    function V_m mV = V_abs + E_L # Membrane potential.
+    r integer                     # counts number of tick during the refractory period
+  end
+
+  equations:
+    shape I_shape_in = exp(-1/tau_syn_in*t)
+    shape I_shape_ex = exp(-1/tau_syn_ex*t)
+    function  I_syn mV = (curr_sum(I_shape_in, in_spikes) + curr_sum(I_shape_ex, ex_spikes) + I_e + currents)
+    V_abs' = (V_abs-E_L)*(V_abs-V_th)/((V_th-E_L)*tau_m) + (I_syn/C_m) *nS
+  end
+
+  parameters:
+    C_m pF = 250pF       # Capacity of the membrane
+    tau_m ms = 10ms      # Membrane time constant.
+    tau_syn_in ms = 2ms  # Time constant of synaptic current.
+    tau_syn_ex ms = 2ms  # Time constant of synaptic current.
+    t_ref ms = 2ms       # Duration of refractory period
+    E_L  mV = -65mV      # Resting potential.
+    V_th mV = -50 mV   ## Threshold Potential in mV
+    function V_reset mV = -70mV - E_L # reset value of the membrane potential
+    function Theta   mV = -55mV - E_L # Threshold, RELATIVE TO RESTING POTENTAIL(!).
+                                      # I.e. the real threshold is (E_L_+V_th)
+    I_e     pA = 0pA     # External current.
+  end
+
+  internals:
+    RefractoryCounts integer = steps(t_ref) # refractory time in steps
+  end
+
+  input:
+    ex_spikes   <- excitatory spike
+    in_spikes   <- inhibitory spike
+    currents    <- current
+  end
+
+  output: spike
+
+  update:
+    if r == 0: # neuron not refractory, so evolve V
+      integrate_odes()
+    else:
+      r = r - 1 # neuron is absolute refractory
+    end
+
+    if V_abs >= Theta: # threshold crossing
+      r = RefractoryCounts
+      V_abs = V_reset
+      emit_spike()
+    end
+
+  end
+
+end
