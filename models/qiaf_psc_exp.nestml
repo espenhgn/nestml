@@ -2,7 +2,7 @@
 Name: qiaf_psc_exp_nestml - Leaky quadratic integrate-and-fire neuron model
                             with exponential PSCs.
 
-Modified by Matthew Farrell
+Modified by Matthew Farrell and Espen Hagen @OIST OCNC 2017
 
 Description:
 qiaf_psc_exp_nestml is an implementation of a quadratic leaky integrate-and-fire model
@@ -29,35 +29,33 @@ Sends: SpikeEvent
 
 Receives: SpikeEvent, CurrentEvent, DataLoggingRequest
 
-SeeAlso: 
+SeeAlso: izhikevitch, izhikevich_psc_alpha, iaf_psc_alpha, mat2_psc_alpha 
 */
 neuron qiaf_psc_exp:
 
   state:
-    V_abs mV
-    function V_m mV = V_abs + E_L # Membrane potential.
+    V_m mV # membrane potential
     r integer                     # counts number of tick during the refractory period
   end
 
   equations:
-    shape I_shape_in = exp(-1/tau_syn_in*t)
-    shape I_shape_ex = exp(-1/tau_syn_ex*t)
-    function  I_syn mV = (curr_sum(I_shape_in, in_spikes) + curr_sum(I_shape_ex, ex_spikes) + I_e + currents)
-    V_abs' = (V_abs-E_L)*(V_abs-V_th)/((V_th-E_L)*tau_m) + (I_syn/C_m) *nS
+    shape I_shape_in = exp(-1/tau_syn_in*t) * pA
+    shape I_shape_ex = exp(-1/tau_syn_ex*t) * pA
+
+    function I_syn pA = (curr_sum(I_shape_ex, ex_spikes) + curr_sum(I_shape_in, in_spikes) + I_e + currents)
+    V_m' = (V_m-E_L)*(V_m-V_th)/((V_th-E_L)*tau_m) + 1/C_m*I_syn
   end
 
   parameters:
-    C_m pF = 250pF       # Capacity of the membrane
-    tau_m ms = 10ms      # Membrane time constant.
-    tau_syn_in ms = 2ms  # Time constant of synaptic current.
-    tau_syn_ex ms = 2ms  # Time constant of synaptic current.
-    t_ref ms = 2ms       # Duration of refractory period
-    E_L  mV = -65mV      # Resting potential.
-    V_th mV = -50 mV   ## Threshold Potential in mV
-    function V_reset mV = -70mV - E_L # reset value of the membrane potential
-    function Theta   mV = -55mV - E_L # Threshold, RELATIVE TO RESTING POTENTAIL(!).
-                                      # I.e. the real threshold is (E_L_+V_th)
-    I_e     pA = 0pA     # External current.
+    C_m pF = 250.0pF       # Capacity of the membrane
+    tau_m ms = 10.0ms      # Membrane time constant.
+    tau_syn_in ms = 2.0ms  # Time constant of synaptic current.
+    tau_syn_ex ms = 2.0ms  # Time constant of synaptic current.
+    t_ref ms = 2.0ms       # Duration of refractory period
+    E_L  mV = -65.0mV      # Resting potential.
+    V_th mV = -50.0mV      # Threshold Potential in mV
+    V_reset mV = -70.0mV   # Reset potential in mV
+    I_e     pA = 0.0pA     # External current.
   end
 
   internals:
@@ -73,17 +71,19 @@ neuron qiaf_psc_exp:
   output: spike
 
   update:
-    if r == 0: # neuron not refractory, so evolve V
-      integrate_odes()
-    else:
-      r = r - 1 # neuron is absolute refractory
+    #if r == 0: # neuron not refractory, so evolve V
+    integrate_odes()
+    #else:
+    if r != 0:
+      r -= 1 # neuron is absolute refractory
     end
 
-    if V_abs >= Theta: # threshold crossing
+    if V_m >= V_th: # threshold crossing
       r = RefractoryCounts
-      V_abs = V_reset
+      V_m = V_reset
       emit_spike()
     end
+    
 
   end
 
