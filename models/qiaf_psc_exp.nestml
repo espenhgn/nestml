@@ -39,11 +39,9 @@ neuron qiaf_psc_exp:
   end
 
   equations:
-    shape I_shape_in = exp(-1/tau_syn_in*t) * pA
-    shape I_shape_ex = exp(-1/tau_syn_ex*t) * pA
-
-    function I_syn pA = (curr_sum(I_shape_ex, ex_spikes) + curr_sum(I_shape_in, in_spikes) + I_e + currents)
-    V_m' = (V_m-E_L)*(V_m-V_th)/((V_th-E_L)*tau_m) + 1/C_m*I_syn
+    shape I_shape_in = pA * e * exp(-1/tau_syn_in*t)
+    shape I_shape_ex = pA * e * exp(-1/tau_syn_ex*t)
+    V_m' = (V_m-E_L)*(V_m-V_th)/((V_th-E_L)*tau_m) + 1/C_m*(curr_sum(I_shape_ex, ex_spikes) + curr_sum(I_shape_in, in_spikes) + I_e + currents)
   end
 
   parameters:
@@ -71,9 +69,7 @@ neuron qiaf_psc_exp:
   output: spike
 
   update:
-    #if r == 0: # neuron not refractory, so evolve V
     integrate_odes()
-    #else:
     if r != 0:
       r -= 1 # neuron is absolute refractory
     end
